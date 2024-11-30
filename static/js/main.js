@@ -104,57 +104,113 @@ $(function () {
         $("body").append(canvas);
     };
 
-    const renderPredictions = function (predictions) {
-        var scale = 1;
+    const cleanPlateText = (text) => {
+        return text.replace(/[^A-Z0-9]/g, ''); // Keep only A-Z and 0-9
+    };
+    
+    const extractPlateText = async (croppedImageBlob) => {
+        const formData = new FormData();
+        formData.append('image', croppedImageBlob);
+    
+        try {
+            const response = await fetch('/process_plate', {
+                method: 'POST',
+                body: formData,
+            });
+    
+            const result = await response.json();
+            if (result.plate_texts) {
+                // Clean the texts
+                const cleanedTexts = result.plate_texts.map(cleanPlateText);
+                console.log("Cleaned Texts:", cleanedTexts);
+                return cleanedTexts.join(", ");
+            } else {
+                console.error("OCR Error:", result.error);
+                return "Error extracting text";
+            }
+        } catch (err) {
+            console.error("Request failed:", err);
+            return "Error extracting text";
+        }
+    };
+    
+    let lastDetectedPlate = ""; // Stores the last detected plate
+    let interval = 5000; // Interval in milliseconds (5 seconds)
+    let lastUpdateTime = 0; // Track the last update time
 
+    // Plate validation function (equivalent to your Python validation in JavaScript)
+    function validatePlate(text, vehicleType) {
+        text = text.replace(/[^A-Z0-9]/g, ""); // Remove invalid characters
+
+        const FOUR_WHEELED_FORMAT = /^[A-Z]{3}\d{4}$/;
+        const TWO_WHEELED_FORMAT = /^\d{3}[A-Z]{3}$|^[A-Z]{1}\d{3}[A-Z]{2}$/;
+
+        if (vehicleType === "both") {
+            if (FOUR_WHEELED_FORMAT.test(text)) return { plate: text, type: "Four Wheeled" };
+            if (TWO_WHEELED_FORMAT.test(text)) return { plate: text, type: "Two Wheeled" };
+        } else if (vehicleType === "Four Wheeled") {
+            if (FOUR_WHEELED_FORMAT.test(text)) return { plate: text, type: "Four Wheeled" };
+        } else if (vehicleType === "Two Wheeled") {
+            if (TWO_WHEELED_FORMAT.test(text)) return { plate: text, type: "Two Wheeled" };
+        }
+        return { plate: "Invalid plate format", type: "Unknown" };
+    }
+
+    const renderPredictions = async function (predictions) {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-        predictions.forEach(function (prediction) {
+        for (const prediction of predictions) {
             const x = prediction.bbox.x;
             const y = prediction.bbox.y;
-
             const width = prediction.bbox.width;
             const height = prediction.bbox.height;
 
-            // Draw the bounding box.
+            // Draw bounding box
             ctx.strokeStyle = prediction.color;
             ctx.lineWidth = 4;
-            ctx.strokeRect(
-                (x - width / 2) / scale,
-                (y - height / 2) / scale,
-                width / scale,
-                height / scale
+            ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+
+            // Crop the detected region
+            const croppedCanvas = document.createElement('canvas');
+            const croppedCtx = croppedCanvas.getContext('2d');
+            croppedCanvas.width = width;
+            croppedCanvas.height = height;
+            croppedCtx.drawImage(
+                video,
+                x - width / 2, y - height / 2, width, height,
+                0, 0, width, height
             );
 
-            // Draw the label background.
-            ctx.fillStyle = prediction.color;
-            const textWidth = ctx.measureText(prediction.class).width;
-            const textHeight = parseInt(font, 10); // base 10
-            ctx.fillRect(
-                (x - width / 2) / scale,
-                (y - height / 2) / scale,
-                textWidth + 8,
-                textHeight + 4
+            // Convert cropped canvas to Blob
+            const croppedBlob = await new Promise(resolve =>
+                croppedCanvas.toBlob(resolve, 'image/jpeg')
             );
-        });
 
-        predictions.forEach(function (prediction) {
-            const x = prediction.bbox.x;
-            const y = prediction.bbox.y;
+            // Perform OCR
+            const plateText = await extractPlateText(croppedBlob);
+            const validatedPlate = validatePlate(plateText, "both");
+            const currentTime = Date.now();
 
-            const width = prediction.bbox.width;
-            const height = prediction.bbox.height;
+            // Only update if the interval has passed and the plate is valid and new
+            if (
+                currentTime - lastUpdateTime > interval &&
+                validatedPlate.plate !== lastDetectedPlate &&
+                validatedPlate.type !== "Unknown"
+            ) {
+                lastDetectedPlate = validatedPlate.plate; // Update last detected plate
+                lastUpdateTime = currentTime; // Update last update time
+                console.log("Displaying Plate:", validatedPlate.plate, validatedPlate.type);
 
-            // Draw the text last to ensure it's on top.
+                // Display the detected plate (example: updating a DOM element)
+                const plateDisplay = document.getElementById("plate-display");
+                plateDisplay.innerText = `Detected Plate: ${validatedPlate.plate} (${validatedPlate.type})`;
+            }
+
+            // Optionally, draw the label on the canvas
+            ctx.fillStyle = "yellow";
             ctx.font = font;
-            ctx.textBaseline = "top";
-            ctx.fillStyle = "#000000";
-            ctx.fillText(
-                prediction.class,
-                (x - width / 2) / scale + 4,
-                (y - height / 2) / scale + 1
-            );
-        });
+            ctx.fillText(lastDetectedPlate, x - width / 2, y - height / 2 - 10);
+        }
     };
 
     var prevTime;
