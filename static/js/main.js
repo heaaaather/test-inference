@@ -5,6 +5,8 @@ $(function () {
     const inferEngine = new InferenceEngine();
 
     const video = $("video")[0];
+    const captureButton = $("#capture-button")[0]; // Button to capture the image
+    const plateDisplay = $("#plate-display")[0]; // Element to display detected plate
 
     var workerId;
     var cameraMode = "environment"; // or "user"
@@ -46,21 +48,14 @@ $(function () {
     const font = "16px sans-serif";
 
     function videoDimensions(video) {
-        // Ratio of the video's intrisic dimensions
         var videoRatio = video.videoWidth / video.videoHeight;
-
-        // The width and height of the video element
         var width = video.offsetWidth,
             height = video.offsetHeight;
-
-        // The ratio of the element's width to its height
         var elementRatio = width / height;
 
-        // If the video element is short and wide
         if (elementRatio > videoRatio) {
             width = height * videoRatio;
         } else {
-            // It must be tall and thin, or exactly equal to the original ratio
             height = width / videoRatio;
         }
 
@@ -76,20 +71,9 @@ $(function () {
 
     const resizeCanvas = function () {
         $("canvas").remove();
-
         canvas = $("<canvas/>");
-
         ctx = canvas[0].getContext("2d");
-
         var dimensions = videoDimensions(video);
-
-        console.log(
-            video.videoWidth,
-            video.videoHeight,
-            video.offsetWidth,
-            video.offsetHeight,
-            dimensions
-        );
 
         canvas[0].width = video.videoWidth;
         canvas[0].height = video.videoHeight;
@@ -120,7 +104,6 @@ $(function () {
     
             const result = await response.json();
             if (result.plate_texts) {
-                // Clean the texts
                 const cleanedTexts = result.plate_texts.map(cleanPlateText);
                 console.log("Cleaned Texts:", cleanedTexts);
                 return cleanedTexts.join(", ");
@@ -138,7 +121,6 @@ $(function () {
     let interval = 5000; // Interval in milliseconds (5 seconds)
     let lastUpdateTime = 0; // Track the last update time
 
-    // Plate validation function (equivalent to your Python validation in JavaScript)
     function validatePlate(text, vehicleType) {
         text = text.replace(/[^A-Z0-9]/g, ""); // Remove invalid characters
 
@@ -165,12 +147,10 @@ $(function () {
             const width = prediction.bbox.width;
             const height = prediction.bbox.height;
 
-            // Draw bounding box
             ctx.strokeStyle = prediction.color;
             ctx.lineWidth = 4;
             ctx.strokeRect(x - width / 2, y - height / 2, width, height);
 
-            // Crop the detected region
             const croppedCanvas = document.createElement('canvas');
             const croppedCtx = croppedCanvas.getContext('2d');
             croppedCanvas.width = width;
@@ -181,32 +161,26 @@ $(function () {
                 0, 0, width, height
             );
 
-            // Convert cropped canvas to Blob
             const croppedBlob = await new Promise(resolve =>
                 croppedCanvas.toBlob(resolve, 'image/jpeg')
             );
 
-            // Perform OCR
             const plateText = await extractPlateText(croppedBlob);
             const validatedPlate = validatePlate(plateText, "both");
             const currentTime = Date.now();
 
-            // Only update if the interval has passed and the plate is valid and new
             if (
                 currentTime - lastUpdateTime > interval &&
                 validatedPlate.plate !== lastDetectedPlate &&
                 validatedPlate.type !== "Unknown"
             ) {
-                lastDetectedPlate = validatedPlate.plate; // Update last detected plate
-                lastUpdateTime = currentTime; // Update last update time
+                lastDetectedPlate = validatedPlate.plate;
+                lastUpdateTime = currentTime;
                 console.log("Displaying Plate:", validatedPlate.plate, validatedPlate.type);
 
-                // Display the detected plate (example: updating a DOM element)
-                const plateDisplay = document.getElementById("plate-display");
                 plateDisplay.innerText = `Detected Plate: ${validatedPlate.plate} (${validatedPlate.type})`;
             }
 
-            // Optionally, draw the label on the canvas
             ctx.fillStyle = "yellow";
             ctx.font = font;
             ctx.fillText(lastDetectedPlate, x - width / 2, y - height / 2 - 10);
@@ -244,4 +218,14 @@ $(function () {
                 requestAnimationFrame(detectFrame);
             });
     };
+
+    // Capture Button Event
+    captureButton.addEventListener("click", function () {
+        const image = new CVImage(video);
+        inferEngine
+            .infer(workerId, image)
+            .then(function (predictions) {
+                renderPredictions(predictions);
+            });
+    });
 });
