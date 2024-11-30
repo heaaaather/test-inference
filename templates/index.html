@@ -17,19 +17,16 @@
         crossorigin="anonymous"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/inferencejs"></script>
-    <!-- v5 -->
-    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-
     <link rel="stylesheet" href="static/css/main.css">
     <script src="static/js/main.js"></script>
 </head>
 
-<body class="loading">
-  <video id="video" autoplay muted playsinline></video>
-  <div id="fps"></div>
-  <div id="plate-display" style="position: absolute; top: 10px; left: 10px; font-size: 20px; color: white; background: black; padding: 10px;">
-      Detected Plate: 
-  </div>
+<body>
+  <video autoplay></video>
+  <canvas style="display:none;"></canvas>
+  <button id="capture-btn">Capture & Recognize</button>
+  <div id="plate-display">Detected Plate: </div>
+  <script src="main.js"></script>
 </body>
 
 
