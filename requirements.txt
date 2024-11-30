@@ -4,6 +4,7 @@ colorama==0.4.6
 easyocr==1.7.2
 filelock==3.16.1
 Flask==3.1.0
+Flask-Cors==5.0.0
 fsspec==2024.10.0
 gunicorn==23.0.0
 imageio==2.36.1
