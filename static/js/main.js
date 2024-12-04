@@ -138,6 +138,7 @@ $(function () {
         return { plate: "Invalid plate format", type: "Unknown" };
     }
 
+    // Update this function to include throttling
     const renderPredictions = async function (predictions) {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -165,20 +166,20 @@ $(function () {
                 croppedCanvas.toBlob(resolve, 'image/jpeg')
             );
 
-            const plateText = await extractPlateText(croppedBlob);
-            const validatedPlate = validatePlate(plateText, "both");
+            // Call OCR extraction only if the time interval has passed
             const currentTime = Date.now();
+            if (currentTime - lastUpdateTime > interval) {
+                const plateText = await extractPlateText(croppedBlob);
+                const validatedPlate = validatePlate(plateText, "both");
 
-            if (
-                currentTime - lastUpdateTime > interval &&
-                validatedPlate.plate !== lastDetectedPlate &&
-                validatedPlate.type !== "Unknown"
-            ) {
-                lastDetectedPlate = validatedPlate.plate;
-                lastUpdateTime = currentTime;
-                console.log("Displaying Plate:", validatedPlate.plate, validatedPlate.type);
+                // If the plate number has changed and it's valid, update the UI
+                if (validatedPlate.plate !== lastDetectedPlate && validatedPlate.type !== "Unknown") {
+                    lastDetectedPlate = validatedPlate.plate;
+                    lastUpdateTime = currentTime;
+                    console.log("Displaying Plate:", validatedPlate.plate, validatedPlate.type);
 
-                plateDisplay.innerText = `Detected Plate: ${validatedPlate.plate} (${validatedPlate.type})`;
+                    plateDisplay.innerText = `Detected Plate: ${validatedPlate.plate} (${validatedPlate.type})`;
+                }
             }
 
             ctx.fillStyle = "yellow";
